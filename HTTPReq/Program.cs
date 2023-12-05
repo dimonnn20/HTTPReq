@@ -9,20 +9,34 @@ using System.Configuration;
 using System.IO;
 using HtmlAgilityPack;
 using System.Text.RegularExpressions;
+using System.Diagnostics;
+using System.Net;
 
 namespace HTTPReq
 {
     internal class Program
     {
         private static string Pattern = @"^--- \/ OR\/\d{4}\/\d{2}\/\d{5}$|OF\/\d{4}\/\d{2}\/\d{5} \/ OR\/\d{4}\/\d{2}\/\d{5}$";
-        private static string SessionId = ExtractJSessionId(ConfigurationManager.AppSettings["Token"]);
+        private static string SessionId;
+        private static int StartPoint;
+        private static int EndPoint;
         static async Task Main(string[] args)
         {
+            var sw = new Stopwatch();
+            await Console.Out.WriteLineAsync("The program starts creating report with following parameters:");
+            SessionId = ExtractJSessionId(ConfigurationManager.AppSettings["Token"]);
+            StartPoint = Convert.ToInt32(ConfigurationManager.AppSettings["StartPoint"]);
+            EndPoint = Convert.ToInt32(ConfigurationManager.AppSettings["EndPoint"]);
+            await Console.Out.WriteLineAsync($"Year of report: {ConfigurationManager.AppSettings["Year"]}");
+            await Console.Out.WriteLineAsync($"Month of report: {ConfigurationManager.AppSettings["Month"]}");
+            await Console.Out.WriteLineAsync($"Place to save report : {ConfigurationManager.AppSettings["PathToSaveReport"]}");
 
-            await Console.Out.WriteLineAsync("The program starts working");
-            List<string> resultList = await Task.Run(async () => await Generate(17286, 17515));
+            sw.Start();
+            List<string> resultList = await Task.Run(async () => await Generate(StartPoint, EndPoint));
+            sw.Stop();
+            //List<string> resultList = await Task.Run(async () => await Generate(1, 17544));
             await WriteToFile(resultList);
-            await Console.Out.WriteLineAsync("success");
+            await Console.Out.WriteLineAsync($"Successfuly saved!\nTime spent : {sw.Elapsed} ");
 
             //List<string> resultList = await Task.Run(async () => await Request(17288));
             //await WriteToFile(resultList);
@@ -33,7 +47,9 @@ namespace HTTPReq
         {
             List<string> resultOfOneId = new List<string>();
             string numberOfOrder = "";
-            string dateOfOrder = "";
+            //string dateOfOrder = "";
+            DateTime dateOfOrder;
+
             string url = $"http://crmlog.ewabis.com.pl:8080/crm/Jsp/viewOrder.jsp;jsessionid={SessionId}?command=viewOrder&nextPage=viewOrder.jsp&mode=view&OrderId={id}";
             using (HttpClient client = new HttpClient())
             {
@@ -62,22 +78,30 @@ namespace HTTPReq
                             {
                                 foreach (HtmlNode paragraph in paragraphs2)
                                 {
-                                    dateOfOrder = paragraph.InnerText.ToString().Trim().Substring(0, 10).Trim();
-                                }
-                                //Going to lines
-                                List<string> nameOfProducts = GetNameOfProductList(htmlDoc);
-                                List<string> nettoPrices = GetNettoPriceList(htmlDoc);
-                                if (nameOfProducts.Count == nettoPrices.Count)
-                                {
-                                    int count = nameOfProducts.Count;
-                                    StringBuilder stringBuilder = new StringBuilder();
-                                    for (int i = 0; i < count; i++)
+                                    string dateTimeString = paragraph.InnerText.ToString().Trim().Substring(0, 10).Trim();
+                                    if (DateTime.TryParseExact(dateTimeString.ToString(), "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out dateOfOrder))
                                     {
-                                        stringBuilder.Append(numberOfOrder).Append(";").Append(dateOfOrder).Append(";").Append(nameOfProducts[i]).Append(";").Append(nettoPrices[i]).Append(";").Append(id);
-                                        resultOfOneId.Add(stringBuilder.ToString());
-                                        stringBuilder.Clear();
+                                        if (dateOfOrder.Year==Convert.ToInt32(ConfigurationManager.AppSettings["Year"]) && dateOfOrder.Month == Convert.ToInt32(ConfigurationManager.AppSettings["Month"]))
+                                        {
+                                            //Going to lines
+                                            List<string> nameOfProducts = GetNameOfProductList(htmlDoc);
+                                            List<string> nettoPrices = GetNettoPriceList(htmlDoc);
+                                            if (nameOfProducts.Count == nettoPrices.Count)
+                                            {
+                                                int count = nameOfProducts.Count;
+                                                StringBuilder stringBuilder = new StringBuilder();
+                                                for (int i = 0; i < count; i++)
+                                                {
+                                                    stringBuilder.Append(numberOfOrder).Append(";").Append(dateOfOrder.ToString("yyyy-MM-dd")).Append(";").Append(nameOfProducts[i]).Append(";").Append(nettoPrices[i]).Append(";").Append(id);
+                                                    resultOfOneId.Add(stringBuilder.ToString());
+                                                    stringBuilder.Clear();
+                                                }
+                                            }
+                                        }
                                     }
                                 }
+
+
                             }
                             //await Console.Out.WriteLineAsync(htmlContent);
                         }
@@ -97,10 +121,21 @@ namespace HTTPReq
 
         static async Task<List<string>> Generate(int startId, int endId)
         {
+            Random random = new Random();
+            Stopwatch sw = new Stopwatch();
             await Console.Out.WriteLineAsync("The program starts generating report");
             List<string> list = new List<string>();
             for (int i = startId; i <= endId; i++)
             {
+                sw.Start();
+                    if (i % 100 == 0)
+                    {
+                    sw.Stop();
+                    int timeLeft = ((int)sw.Elapsed.TotalMilliseconds * ((endId - i) / 100))/1000;
+                    Console.SetCursorPosition(0, Console.CursorTop - 1);
+                    Console.WriteLine($"Completed {i} iterations from {endId}, time left = {timeLeft} seconds");
+                    sw.Restart();
+                    }
                 List<string> tempList = await Request(i);
                 list.AddRange(tempList);
             }
