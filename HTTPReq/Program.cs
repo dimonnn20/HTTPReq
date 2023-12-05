@@ -8,44 +8,33 @@ using System.Threading.Tasks;
 using System.Configuration;
 using System.IO;
 using HtmlAgilityPack;
+using System.Text.RegularExpressions;
 
 namespace HTTPReq
 {
     internal class Program
     {
+        private static string Pattern = @"^--- \/ OR\/\d{4}\/\d{2}\/\d{5}$|OF\/\d{4}\/\d{2}\/\d{5} \/ OR\/\d{4}\/\d{2}\/\d{5}$";
+        private static string SessionId = ExtractJSessionId(ConfigurationManager.AppSettings["Token"]);
         static async Task Main(string[] args)
         {
-            List <string> resultList = await Task.Run(async () => await Generate(17530,17532));
+
+            await Console.Out.WriteLineAsync("The program starts working");
+            List<string> resultList = await Task.Run(async () => await Generate(17286, 17515));
             await WriteToFile(resultList);
             await Console.Out.WriteLineAsync("success");
-            //List<string> resultList = await Task.Run(async () => await Request(17530));
-            //List<string> resultList2 = await Task.Run(async () => await Request(17531));
-            //List<string> resultList3 = await Task.Run(async () => await Request(17532));
 
-            //            List<string> resultList4 = await Task.Run(async () => await Request(17533));
-            //List<string> resultList5 = await Task.Run(async () => await Request(17534));
-            //List<string> resultList6 = await Task.Run(async () => await Request(17535));
-            //List<string> resultList7= await Task.Run(async () => await Request(17536));
-            //List<string> resultList8 = await Task.Run(async () => await Request(17537));
-            //List<string> resultList9 = await Task.Run(async () => await Request(17538));
-
+            //List<string> resultList = await Task.Run(async () => await Request(17288));
+            //await WriteToFile(resultList);
             //foreach (string result in resultList) { await Console.Out.WriteLineAsync(result); }
-            //foreach (string result in resultList2) { await Console.Out.WriteLineAsync(result); }
-            //foreach (string result in resultList3) { await Console.Out.WriteLineAsync(result); }
-            //           foreach (string result in resultList4) { await Console.Out.WriteLineAsync(result); }
-            //foreach (string result in resultList5) { await Console.Out.WriteLineAsync(result); }
-            //foreach (string result in resultList6) { await Console.Out.WriteLineAsync(result); }
-            //foreach (string result in resultList7) { await Console.Out.WriteLineAsync(result); }
-            //foreach (string result in resultList8) { await Console.Out.WriteLineAsync(result); }
-            //foreach (string result in resultList9) { await Console.Out.WriteLineAsync(result); }
         }
 
-        static async Task <List<string>> Request(int id)
+        static async Task<List<string>> Request(int id)
         {
             List<string> resultOfOneId = new List<string>();
             string numberOfOrder = "";
             string dateOfOrder = "";
-            string url = $"http://crmlog.ewabis.com.pl:8080/crm/Jsp/viewOrder.jsp;jsessionid={ConfigurationManager.AppSettings["Token"]}?command=viewOrder&nextPage=viewOrder.jsp&mode=view&OrderId={id}";
+            string url = $"http://crmlog.ewabis.com.pl:8080/crm/Jsp/viewOrder.jsp;jsessionid={SessionId}?command=viewOrder&nextPage=viewOrder.jsp&mode=view&OrderId={id}";
             using (HttpClient client = new HttpClient())
             {
                 try
@@ -58,7 +47,7 @@ namespace HTTPReq
                         htmlDoc.LoadHtml(htmlContent);
 
                         //HtmlNodeCollection paragraphs = htmlDoc.DocumentNode.SelectNodes("//table//tr/td");
-                        
+
                         // Find the number of order
                         HtmlNodeCollection paragraphs = htmlDoc.DocumentNode.SelectNodes("//td[contains(b, 'Numer oferty/zam.')]/following-sibling::td");
                         if (paragraphs != null)
@@ -67,52 +56,36 @@ namespace HTTPReq
                             {
                                 numberOfOrder = paragraph.InnerText.ToString().Trim();
                             }
-                        }
-                        else
-                        {
-                            throw new Exception("There is no records or access denied");
-                        }
-
-                        // Find date of the order
-                        HtmlNodeCollection paragraphs2 = htmlDoc.DocumentNode.SelectNodes("//td[contains(b, 'Data zł./sp.: ')]/following-sibling::td");
-                        if (paragraphs2 != null)
-                        {
-                            foreach (HtmlNode paragraph in paragraphs2)
+                            // Find date of the order
+                            HtmlNodeCollection paragraphs2 = htmlDoc.DocumentNode.SelectNodes("//td[contains(b, 'Data zł./sp.: ')]/following-sibling::td");
+                            if (Regex.IsMatch(numberOfOrder, Pattern) && paragraphs2 != null)
                             {
-                                dateOfOrder = paragraph.InnerText.ToString().Trim().Substring(0, 10).Trim();
+                                foreach (HtmlNode paragraph in paragraphs2)
+                                {
+                                    dateOfOrder = paragraph.InnerText.ToString().Trim().Substring(0, 10).Trim();
+                                }
+                                //Going to lines
+                                List<string> nameOfProducts = GetNameOfProductList(htmlDoc);
+                                List<string> nettoPrices = GetNettoPriceList(htmlDoc);
+                                if (nameOfProducts.Count == nettoPrices.Count)
+                                {
+                                    int count = nameOfProducts.Count;
+                                    StringBuilder stringBuilder = new StringBuilder();
+                                    for (int i = 0; i < count; i++)
+                                    {
+                                        stringBuilder.Append(numberOfOrder).Append(";").Append(dateOfOrder).Append(";").Append(nameOfProducts[i]).Append(";").Append(nettoPrices[i]).Append(";").Append(id);
+                                        resultOfOneId.Add(stringBuilder.ToString());
+                                        stringBuilder.Clear();
+                                    }
+                                }
                             }
+                            //await Console.Out.WriteLineAsync(htmlContent);
                         }
-                        else
-                        {
-                            throw new Exception("There is no records or access denied");
-                        }
-                        //Going to lines
-                        List <string> nameOfProducts = GetNameOfProductList(htmlDoc);
-                        List<string> nettoPrices = GetNettoPriceList(htmlDoc);
-                        if (nameOfProducts.Count == nettoPrices.Count)
-                        {
-                            int count = nameOfProducts.Count;
-                            StringBuilder stringBuilder = new StringBuilder();
-                            for (int i = 0; i < count; i++)
-                            {
-                                stringBuilder.Append(numberOfOrder).Append(";").Append(dateOfOrder).Append(";").Append(nameOfProducts[i]).Append(";").Append(nettoPrices[i]);
-                                resultOfOneId.Add(stringBuilder.ToString());
-                                stringBuilder.Clear();
-                            }
-                        }
-                        else
-                        {
-                            throw new Exception("The list of items is not equal to list of prices");
-                        }
-                        
-                        //await Console.Out.WriteLineAsync(htmlContent);
                     }
                     else
                     {
                         Console.WriteLine($"ERROR: {response.StatusCode} - {response.ReasonPhrase}");
                     }
-
-
                 }
                 catch (Exception ex)
                 {
@@ -122,37 +95,30 @@ namespace HTTPReq
             return resultOfOneId;
         }
 
-        static async Task <List<string>> Generate(int startId, int endId)
-        { 
-            List<string> list = new List<string>();
-            for (int i = startId; i <= endId; i++) 
-            {
-                List <string> tempList = await Request(i);
-                list.AddRange(tempList);     
-            }
-            return list;
-        }
-
-        static string GetCellValue(HtmlDocument htmlDoc, int cellNumber)
+        static async Task<List<string>> Generate(int startId, int endId)
         {
-            // Выполнение запроса XPath для выбора текста из конкретной ячейки
-            HtmlNode cellNode = htmlDoc.DocumentNode.SelectSingleNode($"//tr[@class='tablelistitem'][{cellNumber}]/td[@valign='top']/a");
-            //HtmlNode cellNode = htmlDoc.DocumentNode.SelectSingleNode($"//tr[@class='tablelistitem'][{cellNumber}]/td[@class='maindata']/a");
+            await Console.Out.WriteLineAsync("The program starts generating report");
+            List<string> list = new List<string>();
+            for (int i = startId; i <= endId; i++)
+            {
+                List<string> tempList = await Request(i);
+                list.AddRange(tempList);
+            }
+            await Console.Out.WriteLineAsync("The program ends generating report");
+            return list;
 
-            // Возврат текста из выбранной ячейки
-            return cellNode?.InnerText.Trim() ?? "";
         }
 
         static List<string> GetNameOfProductList(HtmlDocument htmlDoc)
         {
             //var tdNodes = htmlDoc.DocumentNode.SelectNodes($"//tr[@class='tablelistitem']//td[@valign='top']//a");
             var tdNodes = htmlDoc.DocumentNode.SelectNodes($"//tr[@class='tablelistitem']//td[@class='maindata']//a");
-            List <string> values = new List<string>();
+            List<string> values = new List<string>();
             if (tdNodes != null)
             {
                 foreach (var tdNode in tdNodes)
                 {
-                    values.Add(tdNode.InnerText.Trim());
+                    values.Add(RemoveParagraphs(tdNode.InnerText.Trim()).Replace(';', ','));
                 }
             }
             return values;
@@ -172,7 +138,8 @@ namespace HTTPReq
             {
                 foreach (var tdNode in tdNodes)
                 {
-                    values.Add(tdNode.InnerText.Trim());
+                    string str = tdNode.InnerText.Trim();
+                    values.Add(str.Replace(',', ' ').Replace('.', ','));
                 }
             }
 
@@ -192,15 +159,45 @@ namespace HTTPReq
             //await Console.Out.WriteLineAsync($"Length of saved string is = {File.ReadAllBytes(pathToSave).Length} ");
             string fileName = $"{DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss")}.txt";
             string pathToSave = ConfigurationManager.AppSettings["PathToSaveReport"] + fileName;
-            using (FileStream stream = new FileStream(pathToSave, FileMode.Append))
+            using (FileStream stream = new FileStream(pathToSave, FileMode.OpenOrCreate))
             {
                 foreach (string line in lines)
                 {
-                    await stream.WriteAsync(Encoding.Default.GetBytes(line), 0, line.Length);
+                    await stream.WriteAsync(Encoding.Default.GetBytes(line), 0, Encoding.Default.GetByteCount(line));
+                    await stream.WriteAsync(Encoding.Default.GetBytes("\n"), 0, 1);
                 }
 
             }
 
+        }
+        static string RemoveParagraphs(string input)
+        {
+            // Замена символов новой строки на пустую строку
+
+            string result = input.Replace("\n", "");
+            result = result.Replace("\r", "");
+            result = result.Replace("\t", "");
+            return result;
+        }
+
+        static string ExtractJSessionId(string input)
+        {
+
+            string jsessionId;
+            // Ищем индекс начала подстроки "jsessionid=".
+            int startIndex = input.IndexOf("jsessionid=") + "jsessionid=".Length;
+            int endIndex = input.IndexOf("?");
+            if (startIndex > 0)
+            {
+                // Вырезаем подстроку, начиная с "jsessionid=".
+                int length = endIndex - startIndex;
+                jsessionId = input.Substring(startIndex, length);
+                Console.WriteLine($"jsessionId = {jsessionId}");
+                // Ищем конец значения jsessionid (первый символ, не являющийся символом шестнадцатеричной цифры).
+                return jsessionId;
+            }
+
+            return string.Empty;
         }
     }
 }
