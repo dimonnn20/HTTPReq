@@ -151,7 +151,7 @@ namespace HTTPReq
                 }
                 else
                 {
-                    result.Add("none");
+                    result.Add("");
                 }
             }
             return result;
@@ -227,20 +227,14 @@ namespace HTTPReq
 
         static List<string> GetCurrencyList(HtmlDocument htmlDoc)
         {
-            // Выполнение запроса XPath для выбора текста из второго и третьего тегов <TD>
             var tdNodes = htmlDoc.DocumentNode.SelectNodes("//table[@class='tablelist itchistory']//td[@valign='top'][position() = 14]");
-
-            // Инициализация списка для хранения значений
             List<string> values = new List<string>();
-
-            // Добавление значений из выбранных тегов <TD> в список
             if (tdNodes != null)
             {
                 foreach (var tdNode in tdNodes)
                 {
                     string str = tdNode.InnerText.Trim();
                     values.Add(str);
-                    //Console.WriteLine(str);
                 }
             }
 
