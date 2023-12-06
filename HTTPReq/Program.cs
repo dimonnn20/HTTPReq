@@ -24,20 +24,22 @@ namespace HTTPReq
         {
             var sw = new Stopwatch();
             await Console.Out.WriteLineAsync("The program starts creating report with following parameters:");
-            SessionId = ExtractJSessionId(ConfigurationManager.AppSettings["Token"]);
+            //SessionId = ExtractJSessionId(ConfigurationManager.AppSettings["Token"]);
+            SessionId = ConfigurationManager.AppSettings["Token"];
             StartPoint = Convert.ToInt32(ConfigurationManager.AppSettings["StartPoint"]);
             EndPoint = Convert.ToInt32(ConfigurationManager.AppSettings["EndPoint"]);
             await Console.Out.WriteLineAsync($"Year of report: {ConfigurationManager.AppSettings["Year"]}");
             await Console.Out.WriteLineAsync($"Month of report: {ConfigurationManager.AppSettings["Month"]}");
-            await Console.Out.WriteLineAsync($"Place to save report : {ConfigurationManager.AppSettings["PathToSaveReport"]}");
+            //await Console.Out.WriteLineAsync($"Place to save report : {ConfigurationManager.AppSettings["PathToSaveReport"]}");
 
             sw.Start();
             List<string> resultList = await Task.Run(async () => await Generate(StartPoint, EndPoint));
             sw.Stop();
             //List<string> resultList = await Task.Run(async () => await Generate(1, 17544));
             await WriteToFile(resultList);
-            await Console.Out.WriteLineAsync($"Successfuly saved!\nTime spent : {sw.Elapsed} ");
-
+            await Console.Out.WriteLineAsync($"Success!\nTime spent : {sw.Elapsed} ");
+            await Console.Out.WriteLineAsync("Press Enter to close the window");
+            Console.ReadLine();
             //List<string> resultList = await Task.Run(async () => await Request(17288));
             //await WriteToFile(resultList);
             //foreach (string result in resultList) { await Console.Out.WriteLineAsync(result); }
@@ -81,18 +83,22 @@ namespace HTTPReq
                                     string dateTimeString = paragraph.InnerText.ToString().Trim().Substring(0, 10).Trim();
                                     if (DateTime.TryParseExact(dateTimeString.ToString(), "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out dateOfOrder))
                                     {
-                                        if (dateOfOrder.Year==Convert.ToInt32(ConfigurationManager.AppSettings["Year"]) && dateOfOrder.Month == Convert.ToInt32(ConfigurationManager.AppSettings["Month"]))
+                                        if (dateOfOrder.Year == Convert.ToInt32(ConfigurationManager.AppSettings["Year"]) && dateOfOrder.Month == Convert.ToInt32(ConfigurationManager.AppSettings["Month"]))
                                         {
                                             //Going to lines
                                             List<string> nameOfProducts = GetNameOfProductList(htmlDoc);
                                             List<string> nettoPrices = GetNettoPriceList(htmlDoc);
-                                            if (nameOfProducts.Count == nettoPrices.Count)
+                                            List<string> currencyList = GetCurrencyList(htmlDoc);
+                                            List<string> category = GetCategoryList(nameOfProducts);
+
+                                            if (nameOfProducts.Count == nettoPrices.Count && nettoPrices.Count == currencyList.Count)
                                             {
                                                 int count = nameOfProducts.Count;
                                                 StringBuilder stringBuilder = new StringBuilder();
                                                 for (int i = 0; i < count; i++)
                                                 {
-                                                    stringBuilder.Append(numberOfOrder).Append(";").Append(dateOfOrder.ToString("yyyy-MM-dd")).Append(";").Append(nameOfProducts[i]).Append(";").Append(nettoPrices[i]).Append(";").Append(id);
+                                                    stringBuilder.Append(numberOfOrder).Append(";").Append(dateOfOrder.ToString("yyyy-MM-dd")).Append(";").Append(nameOfProducts[i]).Append(";").Append(nettoPrices[i]).Append(";").Append(currencyList[i]).Append(";").Append(category[i]).Append(";").Append(id);
+                                                    //stringBuilder.Append(numberOfOrder).Append(";").Append(dateOfOrder.ToString("yyyy-MM-dd")).Append(";").Append(nameOfProducts[i]).Append(";").Append(nettoPrices[i]).Append(";").Append(id);
                                                     resultOfOneId.Add(stringBuilder.ToString());
                                                     stringBuilder.Clear();
                                                 }
@@ -119,27 +125,65 @@ namespace HTTPReq
             return resultOfOneId;
         }
 
+        private static List<string> GetCategoryList(List<string> nameOfProducts)
+        {
+            List<string> result = new List<string>();
+            foreach (var item in nameOfProducts)
+            {
+                if (item.StartsWith("Etykiet") || item.StartsWith("Taśma") || item.StartsWith("Winietka") || item.StartsWith("Kalka") || item.StartsWith("Tasma"))
+                {
+                    result.Add("Consumables");
+                }
+                else if (item.StartsWith("Midmeki") || item.StartsWith("Logopak") || item.StartsWith("Drukarka") || item.StartsWith("Meki") || item.Contains("Logomatic") || item.Contains("Maszyna") || item.StartsWith("Detektor"))
+                {
+                    result.Add("Machine");
+                }
+                else if (item.StartsWith("Print") || item.StartsWith("Moduł") || item.StartsWith("Usługa") || item.StartsWith("Roboczogodzina") || item.StartsWith("Dojazd") || item.StartsWith("Płyt")
+                     || item.StartsWith("dojazd") || item.StartsWith("Wizyta") || item.StartsWith("wizyta") || item.StartsWith("Płyn") || item.StartsWith("Nocleg") || item.Contains("Filter") || item.Contains("Belt") || StartsWithDigit(item)
+                     || item.StartsWith("dostawa") || item.StartsWith("Dostawa") || item.StartsWith("Diet") || item.StartsWith("Hotel") || item.StartsWith("Kamera") || item.StartsWith("opakowanie") || item.StartsWith("Transport")
+                     || item.StartsWith("Travel") || item.StartsWith("usługa") || item.StartsWith("Work") || item.StartsWith("Zestaw") || item.StartsWith("Tooth") || item.StartsWith("Tester") || item.StartsWith("S") || item.StartsWith("s") || item.Contains("motor")
+                     || item.StartsWith("instalacja") || item.StartsWith("Bulb") || item.StartsWith("Bateria") || item.Contains("Rubber") || item.Contains("Rolka") || item.StartsWith("Cost") || item.Contains("switch") || item.Contains("gumowa") || item.Contains("Belt") ||item.Contains("traveling") || item.Contains("Pasek")
+                     || item.Contains("socket") || item.Contains("roller") || item.Contains("Bearing") || item.Contains("Łożysko") || item.Contains("Fotokomórka") || item.StartsWith("Delivery") || item.Contains("Głowica") || item.Contains("EPROM") 
+                     || item.Contains("Patyczki") || item.Contains("Roundbelt") || item.Contains("LogoCare") || item.Contains("LogoClean") || item.Contains("electronic") || item.StartsWith("Mod")
+                     || item.Contains("Rurka") || item.Contains("Terminal") || item.Contains("Instalacja") || item.Contains("travel") || item.Contains("Sensor") || item.Contains("BATTERY") || item.Contains("mocujący") || item.Contains("Battery") || item.Contains("adapter") || item.Contains("adapter") || item.Contains("Supply") || item.Contains("CPU"))
+                {
+                    result.Add("Service");
+                }
+                else
+                {
+                    result.Add("none");
+                }
+            }
+            return result;
+        }
+
+        private static bool StartsWithDigit(string item)
+        {
+            // Проверяем, не пустая ли строка и начинается ли она с цифры
+            return !string.IsNullOrEmpty(item) && char.IsDigit(item.FirstOrDefault());
+        }
+
         static async Task<List<string>> Generate(int startId, int endId)
         {
             Random random = new Random();
             Stopwatch sw = new Stopwatch();
-            await Console.Out.WriteLineAsync("The program starts generating report");
+            await Console.Out.WriteLineAsync("The program started generating report");
             List<string> list = new List<string>();
             for (int i = startId; i <= endId; i++)
             {
                 sw.Start();
-                    if (i % 100 == 0)
-                    {
+                if (i % 100 == 0)
+                {
                     sw.Stop();
-                    int timeLeft = ((int)sw.Elapsed.TotalMilliseconds * ((endId - i) / 100))/1000;
+                    int timeLeft = ((int)sw.Elapsed.TotalMilliseconds * ((endId - i) / 100)) / 1000;
                     Console.SetCursorPosition(0, Console.CursorTop - 1);
-                    Console.WriteLine($"Completed {i} iterations from {endId}, time left = {timeLeft} seconds");
+                    Console.WriteLine($"Completed {i} iterations from {endId}, time left = " + (timeLeft == 0 ? ".." : timeLeft.ToString()) + " seconds ");
                     sw.Restart();
-                    }
+                }
                 List<string> tempList = await Request(i);
                 list.AddRange(tempList);
             }
-            await Console.Out.WriteLineAsync("The program ends generating report");
+            await Console.Out.WriteLineAsync("The program ended generating report");
             return list;
 
         }
@@ -181,6 +225,28 @@ namespace HTTPReq
             return values;
         }
 
+        static List<string> GetCurrencyList(HtmlDocument htmlDoc)
+        {
+            // Выполнение запроса XPath для выбора текста из второго и третьего тегов <TD>
+            var tdNodes = htmlDoc.DocumentNode.SelectNodes("//table[@class='tablelist itchistory']//td[@valign='top'][position() = 14]");
+
+            // Инициализация списка для хранения значений
+            List<string> values = new List<string>();
+
+            // Добавление значений из выбранных тегов <TD> в список
+            if (tdNodes != null)
+            {
+                foreach (var tdNode in tdNodes)
+                {
+                    string str = tdNode.InnerText.Trim();
+                    values.Add(str);
+                    //Console.WriteLine(str);
+                }
+            }
+
+            return values;
+        }
+
         static async Task WriteToFile(List<string> lines)
         {
             //int length = str.Length;
@@ -193,7 +259,8 @@ namespace HTTPReq
             //}
             //await Console.Out.WriteLineAsync($"Length of saved string is = {File.ReadAllBytes(pathToSave).Length} ");
             string fileName = $"{DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss")}.txt";
-            string pathToSave = ConfigurationManager.AppSettings["PathToSaveReport"] + fileName;
+            //string pathToSave = ConfigurationManager.AppSettings["PathToSaveReport"] + fileName;
+            string pathToSave = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName);
             using (FileStream stream = new FileStream(pathToSave, FileMode.OpenOrCreate))
             {
                 foreach (string line in lines)
@@ -203,6 +270,7 @@ namespace HTTPReq
                 }
 
             }
+            await Console.Out.WriteLineAsync($"Report is successfuly saved to {pathToSave}");
 
         }
         static string RemoveParagraphs(string input)
