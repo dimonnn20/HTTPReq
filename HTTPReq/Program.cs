@@ -36,8 +36,15 @@ namespace HTTPReq
             List<string> resultList = await Task.Run(async () => await Generate(StartPoint, EndPoint));
             sw.Stop();
             //List<string> resultList = await Task.Run(async () => await Generate(1, 17544));
-            await WriteToFile(resultList);
-            await Console.Out.WriteLineAsync($"Success!\nTime spent : {sw.Elapsed} ");
+            if (resultList.Count != 0)
+            {
+                await WriteToFile(resultList);
+                await Console.Out.WriteLineAsync($"Success!\nTime spent : {sw.Elapsed} ");
+            }
+            else
+            {
+                await Console.Out.WriteLineAsync("There were no data that meet the parameters");
+            }
             await Console.Out.WriteLineAsync("Press Enter to close the window");
             Console.ReadLine();
             //List<string> resultList = await Task.Run(async () => await Request(17288));
@@ -175,7 +182,7 @@ namespace HTTPReq
                 if (i % 100 == 0)
                 {
                     sw.Stop();
-                    int timeLeft = ((int)sw.Elapsed.TotalMilliseconds * ((endId - i) / 100)) / 1000;
+                    int timeLeft = ((int)sw.Elapsed.TotalSeconds * ((endId - i) / 100));
                     Console.SetCursorPosition(0, Console.CursorTop - 1);
                     Console.WriteLine($"Completed {i} iterations from {endId}, time left = " + (timeLeft == 0 ? ".." : timeLeft.ToString()) + " seconds ");
                     sw.Restart();
@@ -185,7 +192,6 @@ namespace HTTPReq
             }
             await Console.Out.WriteLineAsync("The program ended generating report");
             return list;
-
         }
 
         static List<string> GetNameOfProductList(HtmlDocument htmlDoc)
@@ -201,7 +207,6 @@ namespace HTTPReq
                 }
             }
             return values;
-
         }
 
         static List<string> GetNettoPriceList(HtmlDocument htmlDoc)
