@@ -25,38 +25,41 @@ namespace HTTPReq
             var sw = new Stopwatch();
             await Console.Out.WriteLineAsync("The program starts creating report with following parameters:");
             //SessionId = ExtractJSessionId(ConfigurationManager.AppSettings["Token"]);
-            SessionId = ConfigurationManager.AppSettings["Token"];
+            
             StartPoint = Convert.ToInt32(ConfigurationManager.AppSettings["StartPoint"]);
             EndPoint = Convert.ToInt32(ConfigurationManager.AppSettings["EndPoint"]);
             await Console.Out.WriteLineAsync($"Year of report: {ConfigurationManager.AppSettings["Year"]}");
             await Console.Out.WriteLineAsync($"Month of report: {ConfigurationManager.AppSettings["Month"]}");
             //await Console.Out.WriteLineAsync($"Place to save report : {ConfigurationManager.AppSettings["PathToSaveReport"]}");
-
-            sw.Start();
-            List<string> resultList = await Task.Run(async () => await Generate(StartPoint, EndPoint));
-            sw.Stop();
-            //List<string> resultList = await Task.Run(async () => await Generate(1, 17544));
-            if (resultList.Count != 0)
+            try
             {
-                await WriteToFile(resultList);
-                await Console.Out.WriteLineAsync($"Success!\nTime spent : {sw.Elapsed} ");
+                SessionId = await getToken();
+                sw.Start();
+                List<string> resultList = await Task.Run(async () => await Generate(StartPoint, EndPoint));
+                if (resultList.Count != 0)
+                {
+                    await WriteToFile(resultList);
+                    await Console.Out.WriteLineAsync($"Success!\nTime spent : {sw.Elapsed} ");
+                }
+                else
+                {
+                    await Console.Out.WriteLineAsync("There were no data that meet the parameters");
+                }
+                sw.Stop();
             }
-            else
+            catch (Exception ex)
             {
-                await Console.Out.WriteLineAsync("There were no data that meet the parameters");
+                ConsoleColor originalColor = Console.ForegroundColor;
+                Console.ForegroundColor = ConsoleColor.Red;
+                await Console.Out.WriteLineAsync(ex.Message);
+                Console.ForegroundColor = originalColor;
             }
-            await Console.Out.WriteLineAsync("Press Enter to close the window");
-            Console.ReadLine();
-            //List<string> resultList = await Task.Run(async () => await Request(17288));
-            //await WriteToFile(resultList);
-            //foreach (string result in resultList) { await Console.Out.WriteLineAsync(result); }
         }
 
         static async Task<List<string>> Request(int id)
         {
             List<string> resultOfOneId = new List<string>();
             string numberOfOrder = "";
-            //string dateOfOrder = "";
             DateTime dateOfOrder;
 
             string url = $"http://crmlog.ewabis.com.pl:8080/crm/Jsp/viewOrder.jsp;jsessionid={SessionId}?command=viewOrder&nextPage=viewOrder.jsp&mode=view&OrderId={id}";
@@ -70,53 +73,55 @@ namespace HTTPReq
                         string htmlContent = await response.Content.ReadAsStringAsync();
                         HtmlDocument htmlDoc = new HtmlDocument();
                         htmlDoc.LoadHtml(htmlContent);
-
-                        //HtmlNodeCollection paragraphs = htmlDoc.DocumentNode.SelectNodes("//table//tr/td");
-
-                        // Find the number of order
-                        HtmlNodeCollection paragraphs = htmlDoc.DocumentNode.SelectNodes("//td[contains(b, 'Numer oferty/zam.')]/following-sibling::td");
-                        if (paragraphs != null)
+                        HtmlNode bodyNode = htmlDoc.DocumentNode.SelectSingleNode("//body");
+                        string text = bodyNode.InnerText.Trim();
+                        if (text.Length != 0)
                         {
-                            foreach (HtmlNode paragraph in paragraphs)
+                            // Find the number of order
+                            HtmlNodeCollection paragraphs = htmlDoc.DocumentNode.SelectNodes("//td[contains(b, 'Numer oferty/zam.')]/following-sibling::td");
+                            if (paragraphs != null)
                             {
-                                numberOfOrder = paragraph.InnerText.ToString().Trim();
-                            }
-                            // Find date of the order
-                            HtmlNodeCollection paragraphs2 = htmlDoc.DocumentNode.SelectNodes("//td[contains(b, 'Data zł./sp.: ')]/following-sibling::td");
-                            if (Regex.IsMatch(numberOfOrder, Pattern) && paragraphs2 != null)
-                            {
-                                foreach (HtmlNode paragraph in paragraphs2)
+                                foreach (HtmlNode paragraph in paragraphs)
                                 {
-                                    string dateTimeString = paragraph.InnerText.ToString().Trim().Substring(0, 10).Trim();
-                                    if (DateTime.TryParseExact(dateTimeString.ToString(), "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out dateOfOrder))
+                                    numberOfOrder = paragraph.InnerText.ToString().Trim();
+                                }
+                                // Find date of the order
+                                HtmlNodeCollection paragraphs2 = htmlDoc.DocumentNode.SelectNodes("//td[contains(b, 'Data zł./sp.: ')]/following-sibling::td");
+                                if (Regex.IsMatch(numberOfOrder, Pattern) && paragraphs2 != null)
+                                {
+                                    foreach (HtmlNode paragraph in paragraphs2)
                                     {
-                                        if (dateOfOrder.Year == Convert.ToInt32(ConfigurationManager.AppSettings["Year"]) && dateOfOrder.Month == Convert.ToInt32(ConfigurationManager.AppSettings["Month"]))
+                                        string dateTimeString = paragraph.InnerText.ToString().Trim().Substring(0, 10).Trim();
+                                        if (DateTime.TryParseExact(dateTimeString.ToString(), "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out dateOfOrder))
                                         {
-                                            //Going to lines
-                                            List<string> nameOfProducts = GetNameOfProductList(htmlDoc);
-                                            List<string> nettoPrices = GetNettoPriceList(htmlDoc);
-                                            List<string> currencyList = GetCurrencyList(htmlDoc);
-                                            List<string> category = GetCategoryList(nameOfProducts);
-
-                                            if (nameOfProducts.Count == nettoPrices.Count && nettoPrices.Count == currencyList.Count)
+                                            if (dateOfOrder.Year == Convert.ToInt32(ConfigurationManager.AppSettings["Year"]) && dateOfOrder.Month == Convert.ToInt32(ConfigurationManager.AppSettings["Month"]))
                                             {
-                                                int count = nameOfProducts.Count;
-                                                StringBuilder stringBuilder = new StringBuilder();
-                                                for (int i = 0; i < count; i++)
+                                                //Going to lines
+                                                List<string> nameOfProducts = GetNameOfProductList(htmlDoc);
+                                                List<string> nettoPrices = GetNettoPriceList(htmlDoc);
+                                                List<string> currencyList = GetCurrencyList(htmlDoc);
+                                                List<string> category = GetCategoryList(nameOfProducts);
+
+                                                if (nameOfProducts.Count == nettoPrices.Count && nettoPrices.Count == currencyList.Count)
                                                 {
-                                                    stringBuilder.Append(numberOfOrder).Append(";").Append(dateOfOrder.ToString("yyyy-MM-dd")).Append(";").Append(nameOfProducts[i]).Append(";").Append(nettoPrices[i]).Append(";").Append(currencyList[i]).Append(";").Append(category[i]).Append(";").Append(id);
-                                                    //stringBuilder.Append(numberOfOrder).Append(";").Append(dateOfOrder.ToString("yyyy-MM-dd")).Append(";").Append(nameOfProducts[i]).Append(";").Append(nettoPrices[i]).Append(";").Append(id);
-                                                    resultOfOneId.Add(stringBuilder.ToString());
-                                                    stringBuilder.Clear();
+                                                    int count = nameOfProducts.Count;
+                                                    StringBuilder stringBuilder = new StringBuilder();
+                                                    for (int i = 0; i < count; i++)
+                                                    {
+                                                        stringBuilder.Append(numberOfOrder).Append(";").Append(dateOfOrder.ToString("yyyy-MM-dd")).Append(";").Append(nameOfProducts[i]).Append(";").Append(nettoPrices[i]).Append(";").Append(currencyList[i]).Append(";").Append(category[i]).Append(";").Append(id);
+                                                        resultOfOneId.Add(stringBuilder.ToString());
+                                                        stringBuilder.Clear();
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
-
-
                             }
-                            //await Console.Out.WriteLineAsync(htmlContent);
+                        }
+                        else
+                        {
+                            throw new Exception("Access token is not correct");
                         }
                     }
                     else
@@ -127,6 +132,7 @@ namespace HTTPReq
                 catch (Exception ex)
                 {
                     Console.WriteLine(ex.ToString());
+                    throw;
                 }
             }
             return resultOfOneId;
@@ -137,7 +143,7 @@ namespace HTTPReq
             List<string> result = new List<string>();
             foreach (var item in nameOfProducts)
             {
-                if (item.StartsWith("Etykiet") || item.StartsWith("Taśma") || item.StartsWith("Winietka") || item.StartsWith("Kalka") || item.StartsWith("Tasma"))
+                if (item.StartsWith("Etykiet") || item.StartsWith("Taśma") || item.StartsWith("Winietka") || item.StartsWith("Kalka") || item.StartsWith("Tasma") || item.StartsWith("TTR"))
                 {
                     result.Add("Consumables");
                 }
@@ -149,10 +155,10 @@ namespace HTTPReq
                      || item.StartsWith("dojazd") || item.StartsWith("Wizyta") || item.StartsWith("wizyta") || item.StartsWith("Płyn") || item.StartsWith("Nocleg") || item.Contains("Filter") || item.Contains("Belt") || StartsWithDigit(item)
                      || item.StartsWith("dostawa") || item.StartsWith("Dostawa") || item.StartsWith("Diet") || item.StartsWith("Hotel") || item.StartsWith("Kamera") || item.StartsWith("opakowanie") || item.StartsWith("Transport")
                      || item.StartsWith("Travel") || item.StartsWith("usługa") || item.StartsWith("Work") || item.StartsWith("Zestaw") || item.StartsWith("Tooth") || item.StartsWith("Tester") || item.StartsWith("S") || item.StartsWith("s") || item.Contains("motor")
-                     || item.StartsWith("instalacja") || item.StartsWith("Bulb") || item.StartsWith("Bateria") || item.Contains("Rubber") || item.Contains("Rolka") || item.StartsWith("Cost") || item.Contains("switch") || item.Contains("gumowa") || item.Contains("Belt") ||item.Contains("traveling") || item.Contains("Pasek")
-                     || item.Contains("socket") || item.Contains("roller") || item.Contains("Bearing") || item.Contains("Łożysko") || item.Contains("Fotokomórka") || item.StartsWith("Delivery") || item.Contains("Głowica") || item.Contains("EPROM") 
+                     || item.StartsWith("instalacja") || item.StartsWith("Bulb") || item.StartsWith("Bateria") || item.Contains("Rubber") || item.Contains("Rolka") || item.StartsWith("Cost") || item.Contains("switch") || item.Contains("gumowa") || item.Contains("Belt") || item.Contains("traveling") || item.Contains("Pasek")
+                     || item.Contains("socket") || item.Contains("roller") || item.Contains("Bearing") || item.Contains("Łożysko") || item.Contains("Fotokomórka") || item.StartsWith("Delivery") || item.Contains("Głowica") || item.Contains("EPROM")
                      || item.Contains("Patyczki") || item.Contains("Roundbelt") || item.Contains("LogoCare") || item.Contains("LogoClean") || item.Contains("electronic") || item.StartsWith("Mod")
-                     || item.Contains("Rurka") || item.Contains("Terminal") || item.Contains("Instalacja") || item.Contains("travel") || item.Contains("Sensor") || item.Contains("BATTERY") || item.Contains("mocujący") || item.Contains("Battery") || item.Contains("adapter") || item.Contains("adapter") || item.Contains("Supply") || item.Contains("CPU"))
+                     || item.Contains("Rurka") || item.Contains("Terminal") || item.Contains("Instalacja") || item.Contains("travel") || item.Contains("Sensor") || item.Contains("BATTERY") || item.Contains("mocujący") || item.Contains("Battery") || item.Contains("adapter") || item.Contains("adapter") || item.Contains("Supply") || item.Contains("CPU") || item.Contains("Motor"))
                 {
                     result.Add("Service");
                 }
@@ -172,26 +178,34 @@ namespace HTTPReq
 
         static async Task<List<string>> Generate(int startId, int endId)
         {
-            Random random = new Random();
-            Stopwatch sw = new Stopwatch();
-            await Console.Out.WriteLineAsync("The program started generating report");
-            List<string> list = new List<string>();
-            for (int i = startId; i <= endId; i++)
+            try
             {
-                sw.Start();
-                if (i % 100 == 0)
+                Random random = new Random();
+                Stopwatch sw = new Stopwatch();
+                await Console.Out.WriteLineAsync("The program started generating report");
+                List<string> list = new List<string>();
+                for (int i = startId; i <= endId; i++)
                 {
-                    sw.Stop();
-                    int timeLeft = ((int)sw.Elapsed.TotalSeconds * ((endId - i) / 100));
-                    Console.SetCursorPosition(0, Console.CursorTop - 1);
-                    Console.WriteLine($"Completed {i} iterations from {endId}, time left = " + (timeLeft == 0 ? ".." : timeLeft.ToString()) + " seconds ");
-                    sw.Restart();
+                    sw.Start();
+                    if (i % 100 == 0)
+                    {
+                        sw.Stop();
+                        int timeLeft = ((int)sw.Elapsed.TotalSeconds * ((endId - i) / 100));
+                        Console.SetCursorPosition(0, Console.CursorTop - 1);
+                        Console.WriteLine($"Completed {i} iterations from {endId}, time left = " + (timeLeft == 0 ? ".." : timeLeft.ToString()) + " seconds ");
+                        sw.Restart();
+                    }
+                    List<string> tempList = await Request(i);
+                    list.AddRange(tempList);
                 }
-                List<string> tempList = await Request(i);
-                list.AddRange(tempList);
+                await Console.Out.WriteLineAsync("The program ended generating report");
+                return list;
             }
-            await Console.Out.WriteLineAsync("The program ended generating report");
-            return list;
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Exception in method Generate: {ex.Message}");
+                throw;
+            }
         }
 
         static List<string> GetNameOfProductList(HtmlDocument htmlDoc)
@@ -211,13 +225,8 @@ namespace HTTPReq
 
         static List<string> GetNettoPriceList(HtmlDocument htmlDoc)
         {
-            // Выполнение запроса XPath для выбора текста из второго и третьего тегов <TD>
             var tdNodes = htmlDoc.DocumentNode.SelectNodes("//table[@class='tablelist itchistory']//td[@valign='top'][position() = 11]");
-
-            // Инициализация списка для хранения значений
             List<string> values = new List<string>();
-
-            // Добавление значений из выбранных тегов <TD> в список
             if (tdNodes != null)
             {
                 foreach (var tdNode in tdNodes)
@@ -226,7 +235,6 @@ namespace HTTPReq
                     values.Add(str.Replace(',', ' ').Replace('.', ','));
                 }
             }
-
             return values;
         }
 
@@ -242,7 +250,6 @@ namespace HTTPReq
                     values.Add(str);
                 }
             }
-
             return values;
         }
 
@@ -300,6 +307,65 @@ namespace HTTPReq
             }
 
             return string.Empty;
+        }
+
+        static async Task<string> getToken()
+        {
+            string token = "";
+            // Замените URL на тот, который вы хотите использовать
+            string url = "http://crmlog.ewabis.com.pl:8080/crm/Jsp/commandCenterAction.jsp";
+
+            // Замените значения параметров на свои
+            string login = ConfigurationManager.AppSettings["Login"]; ;
+            string password = ConfigurationManager.AppSettings["Password"]; ;
+
+            // Создайте HttpClient
+            using (HttpClient client = new HttpClient())
+            {
+                // Создайте данные формы
+                var formContent = new FormUrlEncodedContent(new[]
+                {
+                new KeyValuePair<string, string>("command", "login"),
+                new KeyValuePair<string, string>("nextPage", "welcomeFrame.jsp"),
+                new KeyValuePair<string, string>("login", login),
+                new KeyValuePair<string, string>("password", password),
+                new KeyValuePair<string, string>("isExplorer", "0"),
+                new KeyValuePair<string, string>("isExplorer10up", "0"),
+                new KeyValuePair<string, string>("isFirefox", "0"),
+                new KeyValuePair<string, string>("isSafari", "1"),
+                new KeyValuePair<string, string>("isMobile", "0"),
+                new KeyValuePair<string, string>("isiPad", "0"),
+                new KeyValuePair<string, string>("submited.x", "40"),
+                new KeyValuePair<string, string>("submited.y", "8"),
+                new KeyValuePair<string, string>("LoginInternalConnection", "1"),
+                new KeyValuePair<string, string>("LoginReload", "1"),
+            });
+
+                // Отправьте POST-запрос с данными формы
+                HttpResponseMessage response = await client.PostAsync(url, formContent);
+
+                // Печать статуса ответа
+                //Console.WriteLine($"Статус код: {response.StatusCode}");
+
+                // Печать тела ответа
+                string responseBody = await response.Content.ReadAsStringAsync();
+                //Console.WriteLine($"Тело ответа: {responseBody}");
+                int startIndex = responseBody.IndexOf("jsessionid=") + "jsessionid=".Length;
+                int endIndex = responseBody.IndexOf("?Param=True", startIndex);
+
+                if (startIndex >= 0 && endIndex >= 0)
+                {
+                    token = responseBody.Substring(startIndex, endIndex - startIndex);
+                    await Console.Out.WriteLineAsync("Log in successfuly");
+                }
+                else
+                {
+                    throw new Exception("Session id is not found. Login or password are not correct !!! ");
+                }
+            }
+
+
+            return token;
         }
     }
 }
