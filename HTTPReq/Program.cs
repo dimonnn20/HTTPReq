@@ -274,55 +274,26 @@ namespace HTTPReq
                     await stream.WriteAsync(Encoding.Default.GetBytes(line), 0, Encoding.Default.GetByteCount(line));
                     await stream.WriteAsync(Encoding.Default.GetBytes("\n"), 0, 1);
                 }
-
             }
             await Console.Out.WriteLineAsync($"Report is successfuly saved to {pathToSave}");
-
         }
         static string RemoveParagraphs(string input)
         {
             // Замена символов новой строки на пустую строку
-
             string result = input.Replace("\n", "");
             result = result.Replace("\r", "");
             result = result.Replace("\t", "");
             return result;
         }
 
-        static string ExtractJSessionId(string input)
-        {
-
-            string jsessionId;
-            // Ищем индекс начала подстроки "jsessionid=".
-            int startIndex = input.IndexOf("jsessionid=") + "jsessionid=".Length;
-            int endIndex = input.IndexOf("?");
-            if (startIndex > 0)
-            {
-                // Вырезаем подстроку, начиная с "jsessionid=".
-                int length = endIndex - startIndex;
-                jsessionId = input.Substring(startIndex, length);
-                Console.WriteLine($"jsessionId = {jsessionId}");
-                // Ищем конец значения jsessionid (первый символ, не являющийся символом шестнадцатеричной цифры).
-                return jsessionId;
-            }
-
-            return string.Empty;
-        }
-
         static async Task<string> getToken()
         {
             string token = "";
-            // Замените URL на тот, который вы хотите использовать
             string url = "http://crmlog.ewabis.com.pl:8080/crm/Jsp/commandCenterAction.jsp";
-
-            // Замените значения параметров на свои
             string login = ConfigurationManager.AppSettings["Login"]; ;
             string password = ConfigurationManager.AppSettings["Password"]; ;
-
-            // Создайте HttpClient
             using (HttpClient client = new HttpClient())
             {
-                // Создайте данные формы
                 var formContent = new FormUrlEncodedContent(new[]
                 {
                 new KeyValuePair<string, string>("command", "login"),
@@ -340,19 +311,14 @@ namespace HTTPReq
                 new KeyValuePair<string, string>("LoginInternalConnection", "1"),
                 new KeyValuePair<string, string>("LoginReload", "1"),
             });
-
-                // Отправьте POST-запрос с данными формы
                 HttpResponseMessage response = await client.PostAsync(url, formContent);
-
                 // Печать статуса ответа
                 //Console.WriteLine($"Статус код: {response.StatusCode}");
-
                 // Печать тела ответа
                 string responseBody = await response.Content.ReadAsStringAsync();
                 //Console.WriteLine($"Тело ответа: {responseBody}");
                 int startIndex = responseBody.IndexOf("jsessionid=") + "jsessionid=".Length;
                 int endIndex = responseBody.IndexOf("?Param=True", startIndex);
-
                 if (startIndex >= 0 && endIndex >= 0)
                 {
                     token = responseBody.Substring(startIndex, endIndex - startIndex);
